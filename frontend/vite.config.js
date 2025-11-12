@@ -6,16 +6,21 @@ export default defineConfig({
   plugins: [react()],
   server: {
     headers: {
-      "Cross-Origin-Embedder-Policy": "require-corp",
-      "Cross-Origin-Opener-Policy": "same-origin"
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp'
     },
-     proxy: {
+    proxy: {
       '/cdn': {
         target: 'https://unpkg.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/cdn/, '')
       }
     }
-
+  },
+  preview: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp'
+    }
   }
 })
