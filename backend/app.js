@@ -10,7 +10,15 @@ connect(); //connect to the database
 
 const app = express(); //initialize express app
 
-app.use(cors()); //using cors middleware
+app.use(
+  cors({
+    origin: [
+      "https://realtime-chat-app-with-google-gemini-1.onrender.com", // ✅ your frontend URL
+      "http://localhost:5173" // optional: keep for local testing
+    ],
+    credentials: true,
+  })
+);
 app.use(morgan('dev')); //using morgan middleware for logging request details
 app.use(express.json()); //middleware to parse JSON request bodies
 app.use(express.urlencoded({ extended: true })); //middleware to parse URL-encoded request bodies
