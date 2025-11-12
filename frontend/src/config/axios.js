@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: "https://realtime-chat-app-with-google-gemini.onrender.com",
 });
 
 // Optional: Set Authorization header dynamically before each request
