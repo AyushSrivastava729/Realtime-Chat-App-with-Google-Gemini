@@ -9,18 +9,18 @@ import { generateResult } from './services/ai.service.js';
 
 const PORT = process.env.PORT || 3000;
 
-// ✅ First create the HTTP server using Express app
+// ✅ FIRST create HTTP server here
 const server = http.createServer(app);
 
-// ✅ Then create Socket.io server using that HTTP server
+// ✅ THEN use it with Socket.io
 const io = new Server(server, {
   cors: {
-    origin: "https://realtime-chat-app-with-google-gemini-1.onrender.com", // your frontend link
+    origin: "https://realtime-chat-app-with-google-gemini-1.onrender.com", // your frontend URL
     credentials: true,
   },
 });
 
-// ✅ Authentication for socket connections
+// ✅ Socket authentication middleware
 io.use(async (socket, next) => {
   try {
     const token =
@@ -34,14 +34,10 @@ io.use(async (socket, next) => {
 
     socket.project = await projectModel.findById(projectId);
 
-    if (!token) {
-      return next(new Error("Authentication error"));
-    }
+    if (!token) return next(new Error("Authentication error"));
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    if (!decoded) {
-      return next(new Error("Authentication error"));
-    }
+    if (!decoded) return next(new Error("Authentication error"));
 
     socket.user = decoded;
     next();
@@ -50,7 +46,7 @@ io.use(async (socket, next) => {
   }
 });
 
-// ✅ Handle connection
+// ✅ Handle socket connections
 io.on("connection", (socket) => {
   socket.roomId = socket.project._id.toString();
   console.log("A user connected");
@@ -68,12 +64,8 @@ io.on("connection", (socket) => {
 
       io.to(socket.roomId).emit("project-message", {
         message: result,
-        sender: {
-          _id: "ai",
-          email: "AI",
-        },
+        sender: { _id: "ai", email: "AI" },
       });
-      return;
     }
   });
 
@@ -83,7 +75,7 @@ io.on("connection", (socket) => {
   });
 });
 
-// ✅ Start the server
+// ✅ Start server
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`✅ Server running on port ${PORT}`);
 });
