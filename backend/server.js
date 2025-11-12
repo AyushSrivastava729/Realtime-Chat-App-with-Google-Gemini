@@ -5,102 +5,85 @@ import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import projectModel from './models/project.model.js';
-import {generateResult} from './services/ai.service.js'
-
-
+import { generateResult } from './services/ai.service.js';
 
 const PORT = process.env.PORT || 3000;
 
+// ✅ First create the HTTP server using Express app
+const server = http.createServer(app);
+
+// ✅ Then create Socket.io server using that HTTP server
 const io = new Server(server, {
   cors: {
-    origin: [
-      "https://realtime-chat-app-with-google-gemini-1.onrender.com",
-      "http://localhost:5173"
-    ],
-    credentials: true
+    origin: "https://realtime-chat-app-with-google-gemini-1.onrender.com", // your frontend link
+    credentials: true,
+  },
+});
+
+// ✅ Authentication for socket connections
+io.use(async (socket, next) => {
+  try {
+    const token =
+      socket.handshake.auth?.token ||
+      socket.handshake.headers.authorization?.split(" ")[1];
+    const projectId = socket.handshake.query.projectId;
+
+    if (!mongoose.Types.ObjectId.isValid(projectId)) {
+      return next(new Error("Invalid projectId"));
+    }
+
+    socket.project = await projectModel.findById(projectId);
+
+    if (!token) {
+      return next(new Error("Authentication error"));
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (!decoded) {
+      return next(new Error("Authentication error"));
+    }
+
+    socket.user = decoded;
+    next();
+  } catch (error) {
+    next(new Error("Authentication error"));
   }
 });
 
+// ✅ Handle connection
+io.on("connection", (socket) => {
+  socket.roomId = socket.project._id.toString();
+  console.log("A user connected");
+  socket.join(socket.roomId);
 
-io.use(async(socket, next) => {
-    try {
-        // Get token from auth or header
-        const token = socket.handshake.auth?.token || socket.handshake.headers.authorization?.split(' ')[1];
-        const projectId=socket.handshake.query.projectId;
+  socket.on("project-message", async (data) => {
+    const message = data.message;
+    const aiIsPresentInMessage = message.includes("@ai");
 
-        
-        if (!mongoose.Types.ObjectId.isValid(projectId)) {
-            return next(new Error('Invalid projectId'));
-        }
+    socket.broadcast.to(socket.roomId).emit("project-message", data);
 
-            socket.project = await projectModel.findById(projectId);
+    if (aiIsPresentInMessage) {
+      const prompt = message.replace("@ai", "");
+      const result = await generateResult(prompt);
 
-
-
-
-
-
-        if (!token) {
-            return next(new Error('Authentication error'));
-        }
-
-        // Verify JWT
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        if (!decoded) {
-            return next(new Error('Authentication error'));
-        }
-
-        socket.user = decoded;
-        next();
-        
-    } catch (error) {
-        next(new Error('Authentication error'));
+      io.to(socket.roomId).emit("project-message", {
+        message: result,
+        sender: {
+          _id: "ai",
+          email: "AI",
+        },
+      });
+      return;
     }
-});
+  });
 
-
-
-io.on('connection', socket => {
-    socket.roomId =socket.project._id.toString()
-
-console.log(' a user connected ')
-
-socket.join(socket.roomId)
-
-socket.on('project-message', async data=>{
-
-    const message=data.message;
-
-    const aiIsPresentInMessage=message.includes('@ai');
-     socket.broadcast.to(socket.roomId).emit('project-message',data);
-
-    if(aiIsPresentInMessage){
-        
-        const prompt=message.replace('@ai','');
-
-        const result=await generateResult(prompt);
-
-        io.to(socket.roomId).emit('project-message',{
-            message:result,
-            sender:{
-                _id:'ai',
-                email:'AI'
-            }
-        })
-       
-        return
-    }
-
-
-})
-
-  socket.on('disconnect', () => { 
-    console.log('user disconnected')
-    socket.leave(socket.roomId)
-
+  socket.on("disconnect", () => {
+    console.log("User disconnected");
+    socket.leave(socket.roomId);
   });
 });
 
+// ✅ Start the server
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
