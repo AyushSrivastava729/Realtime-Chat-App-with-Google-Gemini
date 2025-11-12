@@ -11,12 +11,16 @@ import {generateResult} from './services/ai.service.js'
 
 const PORT = process.env.PORT || 3000;
 
-const server = http.createServer(app);
-const io =new Server (server,{
-    cors:{
-        origin:'*'
-    }
+const io = new Server(server, {
+  cors: {
+    origin: [
+      "https://realtime-chat-app-with-google-gemini-1.onrender.com",
+      "http://localhost:5173"
+    ],
+    credentials: true
+  }
 });
+
 
 io.use(async(socket, next) => {
     try {
