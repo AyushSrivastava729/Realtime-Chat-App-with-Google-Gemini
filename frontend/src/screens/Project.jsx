@@ -78,15 +78,19 @@ const Project = () => {
   }
 
   useEffect(() => {
-    initializeSocket(project._id)
+    const isLocal = window.location.hostname === 'localhost'
 
-    // Initialize WebContainer safely
-    if (!webContainer) {
-      getWebContainer().then((container) => {
-        setWebContainer(container)
-        console.log('✅ WebContainer started')
-      })
+    // Only initialize WebContainer locally
+    if (isLocal && !webContainer) {
+      getWebContainer()
+        .then((container) => {
+          setWebContainer(container)
+          console.log('✅ WebContainer started (localhost only)')
+        })
+        .catch((err) => console.error('❌ Failed to start WebContainer:', err))
     }
+
+    initializeSocket(project._id)
 
     receiveMessage('project-message', (data) => {
       if (data.sender._id === 'ai') {
@@ -126,7 +130,6 @@ const Project = () => {
     <main className="h-screen w-screen flex bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-300">
       {/* Left Panel (Chat + Collaborators) */}
       <section className="left relative flex flex-col min-w-96 bg-gray-100 dark:bg-gray-800 border-r border-gray-300 dark:border-gray-700">
-        {/* Header */}
         <header className="flex justify-between items-center p-3 bg-gray-200 dark:bg-gray-700 shadow-sm sticky top-0 z-10">
           <button
             onClick={() => setIsModalOpen(true)}
@@ -142,7 +145,6 @@ const Project = () => {
           </button>
         </header>
 
-        {/* Messages */}
         <div className="conversation-area flex flex-col flex-grow overflow-hidden">
           <div
             ref={messageBox}
@@ -165,7 +167,6 @@ const Project = () => {
             ))}
           </div>
 
-          {/* Input */}
           <div className="flex items-center border-t border-gray-300 dark:border-gray-700">
             <input
               value={message}
@@ -183,9 +184,7 @@ const Project = () => {
         </div>
       </section>
 
-      {/* Right Side (Code Editor + Preview) */}
       <section className="flex flex-grow h-full">
-        {/* File Explorer */}
         <div className="explorer bg-gray-200 dark:bg-gray-800 w-64 border-r border-gray-300 dark:border-gray-700">
           <div className="p-2 font-semibold text-sm text-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-700">
             Files
@@ -210,7 +209,6 @@ const Project = () => {
           </div>
         </div>
 
-        {/* Code Editor + Run */}
         <div className="flex flex-col flex-grow">
           <div className="flex justify-between items-center bg-gray-100 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700 p-2">
             <div className="flex gap-2">
@@ -229,12 +227,12 @@ const Project = () => {
               ))}
             </div>
 
-            {/* ✅ Fixed Run Button */}
             <button
               onClick={async () => {
                 if (!webContainer) {
-                  console.error('❌ WebContainer not initialized yet.')
-                  alert('Please wait a few seconds — container is starting.')
+                  alert(
+                    '⚠️ WebContainer not available on deployed site.\nRun feature works only on localhost.'
+                  )
                   return
                 }
 
@@ -249,10 +247,7 @@ const Project = () => {
                     })
                   )
 
-                  if (runProcess) {
-                    console.log('🛑 Killing previous process...')
-                    runProcess.kill()
-                  }
+                  if (runProcess) runProcess.kill()
 
                   const tempRunProcess = await webContainer.spawn('npm', ['start'])
                   tempRunProcess.output.pipeTo(
@@ -279,7 +274,6 @@ const Project = () => {
             </button>
           </div>
 
-          {/* Code Area */}
           <div className="flex-grow overflow-auto bg-gray-50 dark:bg-gray-900 p-3">
             {fileTree[currentFile] && (
               <pre className="hljs">
@@ -309,7 +303,6 @@ const Project = () => {
           </div>
         </div>
 
-        {/* Preview Panel */}
         {iframeUrl && webContainer && (
           <div className="w-96 flex flex-col border-l border-gray-300 dark:border-gray-700">
             <input
