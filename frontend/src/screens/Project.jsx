@@ -26,7 +26,7 @@ const Project = () => {
   const [project, setProject] = useState(location.state.project)
   const [message, setMessage] = useState('')
   const { user } = useContext(UserContext)
-  const messageBox = React.createRef()
+  const messageBox = useRef()
 
   const [users, setUsers] = useState([])
   const [messages, setMessages] = useState([])
@@ -46,10 +46,10 @@ const Project = () => {
     })
   }
 
-  function addCollaborators() {
+  const addCollaborators = () => {
     axios
       .put('/projects/add-user', {
-        projectId: location.state.project._id,
+        projectId: project._id,
         users: Array.from(selectedUserId),
       })
       .then((res) => {
@@ -65,7 +65,7 @@ const Project = () => {
     setMessage('')
   }
 
-  function WriteAiMessage(message) {
+  const WriteAiMessage = (message) => {
     const messageObject = JSON.parse(message)
     return (
       <div className="overflow-auto bg-slate-900 text-white rounded-lg p-3">
@@ -80,7 +80,6 @@ const Project = () => {
   useEffect(() => {
     const isLocal = window.location.hostname === 'localhost'
 
-    // Only initialize WebContainer locally
     if (isLocal && !webContainer) {
       getWebContainer()
         .then((container) => {
@@ -106,7 +105,7 @@ const Project = () => {
     })
 
     axios
-      .get(`/projects/get-project/${location.state.project._id}`)
+      .get(`/projects/get-project/${project._id}`)
       .then((res) => {
         setProject(res.data.project)
         setFileTree(res.data.project.fileTree || {})
@@ -116,7 +115,7 @@ const Project = () => {
     axios.get('/users/all').then((res) => setUsers(res.data.users)).catch(console.log)
   }, [])
 
-  function saveFileTree(ft) {
+  const saveFileTree = (ft) => {
     axios
       .put('/projects/update-file-tree', {
         projectId: project._id,
@@ -129,7 +128,7 @@ const Project = () => {
   return (
     <main className="h-screen w-screen flex bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-300">
       {/* Left Panel (Chat + Collaborators) */}
-      <section className="left relative flex flex-col min-w-96 bg-gray-100 dark:bg-gray-800 border-r border-gray-300 dark:border-gray-700">
+      <section className="flex flex-col min-w-[24rem] bg-gray-100 dark:bg-gray-800 border-r border-gray-300 dark:border-gray-700">
         <header className="flex justify-between items-center p-3 bg-gray-200 dark:bg-gray-700 shadow-sm sticky top-0 z-10">
           <button
             onClick={() => setIsModalOpen(true)}
@@ -145,46 +144,115 @@ const Project = () => {
           </button>
         </header>
 
-        <div className="conversation-area flex flex-col flex-grow overflow-hidden">
+        <div className="flex flex-grow overflow-hidden">
+          {/* Chat Area */}
           <div
-            ref={messageBox}
-            className="flex-grow p-3 overflow-y-auto flex flex-col gap-2 scrollbar-hide"
+            className={`flex flex-col flex-grow transition-all duration-300 ${
+              isSidePanelOpen ? 'w-2/3' : 'w-full'
+            }`}
           >
-            {messages.map((msg, i) => (
-              <div
-                key={i}
-                className={`${
-                  msg.sender._id === user._id.toString()
-                    ? 'ml-auto bg-blue-600 text-white'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
-                } rounded-lg p-2 max-w-[75%]`}
-              >
-                <small className="block text-xs opacity-70">{msg.sender.email}</small>
-                <div className="mt-1 text-sm">
-                  {msg.sender._id === 'ai' ? WriteAiMessage(msg.message) : msg.message}
+            <div
+              ref={messageBox}
+              className="flex-grow p-3 overflow-y-auto flex flex-col gap-2 scrollbar-hide"
+            >
+              {messages.map((msg, i) => (
+                <div
+                  key={i}
+                  className={`${
+                    msg.sender._id === user._id.toString()
+                      ? 'ml-auto bg-blue-600 text-white'
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
+                  } rounded-lg p-2 max-w-[75%]`}
+                >
+                  <small className="block text-xs opacity-70">{msg.sender.email}</small>
+                  <div className="mt-1 text-sm">
+                    {msg.sender._id === 'ai' ? WriteAiMessage(msg.message) : msg.message}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+
+            <div className="flex items-center border-t border-gray-300 dark:border-gray-700">
+              <input
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                className="flex-grow p-2 px-4 bg-transparent outline-none"
+                placeholder="Enter message..."
+              />
+              <button
+                onClick={send}
+                className="p-3 bg-blue-600 hover:bg-blue-700 text-white transition"
+              >
+                <i className="ri-send-plane-fill"></i>
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center border-t border-gray-300 dark:border-gray-700">
-            <input
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              className="flex-grow p-2 px-4 bg-transparent outline-none"
-              placeholder="Enter message..."
-            />
-            <button
-              onClick={send}
-              className="p-3 bg-blue-600 hover:bg-blue-700 text-white transition"
-            >
-              <i className="ri-send-plane-fill"></i>
-            </button>
-          </div>
+          {/* Side Panel (Collaborators) */}
+          {isSidePanelOpen && (
+            <div className="w-1/3 bg-gray-200 dark:bg-gray-800 border-l border-gray-300 dark:border-gray-700 p-4 flex flex-col overflow-y-auto transition-all duration-300">
+              <h3 className="font-semibold mb-2 text-gray-700 dark:text-gray-300">Collaborators</h3>
+              <div className="flex flex-col gap-2 flex-grow overflow-y-auto">
+                {users.map((u) => (
+                  <label key={u._id} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedUserId.has(u._id)}
+                      onChange={() => handleUserClick(u._id)}
+                    />
+                    <span className="text-sm text-gray-800 dark:text-gray-200">{u.email}</span>
+                  </label>
+                ))}
+              </div>
+              <button
+                onClick={addCollaborators}
+                className="mt-4 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Add Selected
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Add Collaborator Modal */}
+        {isModalOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-30">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-lg w-96">
+              <h2 className="text-lg font-semibold mb-4">Add Collaborators</h2>
+              <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+                {users.map((u) => (
+                  <label key={u._id} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedUserId.has(u._id)}
+                      onChange={() => handleUserClick(u._id)}
+                    />
+                    {u.email}
+                  </label>
+                ))}
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={addCollaborators}
+                  className="px-4 py-2 bg-blue-600 text-white rounded"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
+      {/* Center: File Explorer + Editor */}
       <section className="flex flex-grow h-full">
+        {/* Explorer */}
         <div className="explorer bg-gray-200 dark:bg-gray-800 w-64 border-r border-gray-300 dark:border-gray-700">
           <div className="p-2 font-semibold text-sm text-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-700">
             Files
@@ -209,6 +277,7 @@ const Project = () => {
           </div>
         </div>
 
+        {/* Editor */}
         <div className="flex flex-col flex-grow">
           <div className="flex justify-between items-center bg-gray-100 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700 p-2">
             <div className="flex gap-2">
@@ -303,6 +372,7 @@ const Project = () => {
           </div>
         </div>
 
+        {/* Right Panel: Web Preview */}
         {iframeUrl && webContainer && (
           <div className="w-96 flex flex-col border-l border-gray-300 dark:border-gray-700">
             <input
