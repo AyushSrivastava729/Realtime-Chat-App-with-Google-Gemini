@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext, useRef } from 'react'
 import { UserContext } from '../context/user.context'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import axios from '../config/axios'
 import { initializeSocket, receiveMessage, sendMessage } from '../config/socket'
 import Markdown from 'markdown-to-jsx'
@@ -20,22 +20,59 @@ function SyntaxHighlightedCode(props) {
 
 const Project = () => {
   const location = useLocation()
-  const [isSidePanelOpen, setIsSidePanelOpen] = useState(false)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [selectedUserId, setSelectedUserId] = useState(new Set())
-  const [project, setProject] = useState(location.state.project)
-  const [message, setMessage] = useState('')
   const { user } = useContext(UserContext)
-  const messageBox = useRef()
-
+  const [project, setProject] = useState(location.state.project)
   const [users, setUsers] = useState([])
+  const [selectedUserId, setSelectedUserId] = useState(new Set())
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const [messages, setMessages] = useState([])
+  const [message, setMessage] = useState('')
+  const messageBox = useRef()
   const [fileTree, setFileTree] = useState({})
   const [currentFile, setCurrentFile] = useState(null)
   const [openFiles, setOpenFiles] = useState([])
   const [webContainer, setWebContainer] = useState(null)
   const [iframeUrl, setIframeUrl] = useState(null)
   const [runProcess, setRunProcess] = useState(null)
+
+  // Dynamic panel widths
+  const [leftWidth, setLeftWidth] = useState(300)
+  const [centerWidth, setCenterWidth] = useState(500)
+  const [rightWidth, setRightWidth] = useState(400)
+  const resizerRef = useRef(null)
+  const resizingRef = useRef(false)
+  const resizePanel = useRef(null)
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!resizingRef.current || !resizePanel.current) return
+      const dx = e.movementX
+      if (resizePanel.current === 'left-center') {
+        setLeftWidth((prev) => Math.max(200, prev + dx))
+        setCenterWidth((prev) => Math.max(200, prev - dx))
+      } else if (resizePanel.current === 'center-right') {
+        setCenterWidth((prev) => Math.max(200, prev + dx))
+        setRightWidth((prev) => Math.max(200, prev - dx))
+      }
+    }
+
+    const handleMouseUp = () => {
+      resizingRef.current = false
+      resizePanel.current = null
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [])
+
+  const handleResizerMouseDown = (panel) => {
+    resizingRef.current = true
+    resizePanel.current = panel
+  }
 
   const handleUserClick = (id) => {
     setSelectedUserId((prev) => {
@@ -56,7 +93,7 @@ const Project = () => {
         console.log(res.data)
         setIsModalOpen(false)
       })
-      .catch((err) => console.log(err))
+      .catch(console.log)
   }
 
   const send = () => {
@@ -82,26 +119,13 @@ const Project = () => {
 
     if (isLocal && !webContainer) {
       getWebContainer()
-        .then((container) => {
-          setWebContainer(container)
-          console.log('✅ WebContainer started (localhost only)')
-        })
-        .catch((err) => console.error('❌ Failed to start WebContainer:', err))
+        .then((container) => setWebContainer(container))
+        .catch(console.error)
     }
 
     initializeSocket(project._id)
-
     receiveMessage('project-message', (data) => {
-      if (data.sender._id === 'ai') {
-        const message = JSON.parse(data.message)
-        if (message.fileTree && webContainer) {
-          webContainer.mount(message.fileTree)
-        }
-        if (message.fileTree) setFileTree(message.fileTree || {})
-        setMessages((prev) => [...prev, data])
-      } else {
-        setMessages((prev) => [...prev, data])
-      }
+      setMessages((prev) => [...prev, data])
     })
 
     axios
@@ -121,143 +145,72 @@ const Project = () => {
         projectId: project._id,
         fileTree: ft,
       })
-      .then((res) => console.log('✅ File tree saved:', res.data))
-      .catch((err) => console.log('❌ Error saving file tree:', err))
+      .then((res) => console.log('File tree saved'))
+      .catch(console.log)
   }
 
   return (
     <main className="h-screen w-screen flex bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-300">
-      {/* Left Panel (Chat + Collaborators) */}
-      <section className="flex flex-col min-w-[24rem] bg-gray-100 dark:bg-gray-800 border-r border-gray-300 dark:border-gray-700">
-        <header className="flex justify-between items-center p-3 bg-gray-200 dark:bg-gray-700 shadow-sm sticky top-0 z-10">
+      {/* Left panel */}
+      <section
+        className="flex flex-col bg-gray-100 dark:bg-gray-800 border-r border-gray-300 dark:border-gray-700"
+        style={{ width: leftWidth }}
+      >
+        <header className="flex justify-between items-center p-3 bg-gray-200 dark:bg-gray-700 shadow-sm">
           <button
             onClick={() => setIsModalOpen(true)}
             className="flex items-center gap-2 text-sm font-medium hover:text-blue-600"
           >
-            <i className="ri-add-fill"></i> Add collaborator
-          </button>
-          <button
-            onClick={() => setIsSidePanelOpen(!isSidePanelOpen)}
-            className="p-2 hover:bg-gray-300 dark:hover:bg-gray-600 rounded"
-          >
-            <i className="ri-group-fill text-lg"></i>
+            Add collaborator
           </button>
         </header>
 
-        <div className="flex flex-grow overflow-hidden">
-          {/* Chat Area */}
-          <div
-            className={`flex flex-col flex-grow transition-all duration-300 ${
-              isSidePanelOpen ? 'w-2/3' : 'w-full'
-            }`}
-          >
+        <div className="flex-grow p-3 overflow-y-auto flex flex-col gap-2 scrollbar-hide">
+          {messages.map((msg, i) => (
             <div
-              ref={messageBox}
-              className="flex-grow p-3 overflow-y-auto flex flex-col gap-2 scrollbar-hide"
+              key={i}
+              className={`${
+                msg.sender._id === user._id.toString()
+                  ? 'ml-auto bg-blue-600 text-white'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
+              } rounded-lg p-2 max-w-[75%]`}
             >
-              {messages.map((msg, i) => (
-                <div
-                  key={i}
-                  className={`${
-                    msg.sender._id === user._id.toString()
-                      ? 'ml-auto bg-blue-600 text-white'
-                      : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
-                  } rounded-lg p-2 max-w-[75%]`}
-                >
-                  <small className="block text-xs opacity-70">{msg.sender.email}</small>
-                  <div className="mt-1 text-sm">
-                    {msg.sender._id === 'ai' ? WriteAiMessage(msg.message) : msg.message}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex items-center border-t border-gray-300 dark:border-gray-700">
-              <input
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                className="flex-grow p-2 px-4 bg-transparent outline-none"
-                placeholder="Enter message..."
-              />
-              <button
-                onClick={send}
-                className="p-3 bg-blue-600 hover:bg-blue-700 text-white transition"
-              >
-                <i className="ri-send-plane-fill"></i>
-              </button>
-            </div>
-          </div>
-
-          {/* Side Panel (Collaborators) */}
-          {isSidePanelOpen && (
-            <div className="w-1/3 bg-gray-200 dark:bg-gray-800 border-l border-gray-300 dark:border-gray-700 p-4 flex flex-col overflow-y-auto transition-all duration-300">
-              <h3 className="font-semibold mb-2 text-gray-700 dark:text-gray-300">Collaborators</h3>
-              <div className="flex flex-col gap-2 flex-grow overflow-y-auto">
-                {users.map((u) => (
-                  <label key={u._id} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedUserId.has(u._id)}
-                      onChange={() => handleUserClick(u._id)}
-                    />
-                    <span className="text-sm text-gray-800 dark:text-gray-200">{u.email}</span>
-                  </label>
-                ))}
+              <small className="block text-xs opacity-70">{msg.sender.email}</small>
+              <div className="mt-1 text-sm">
+                {msg.sender._id === 'ai' ? WriteAiMessage(msg.message) : msg.message}
               </div>
-              <button
-                onClick={addCollaborators}
-                className="mt-4 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                Add Selected
-              </button>
             </div>
-          )}
+          ))}
         </div>
 
-        {/* Add Collaborator Modal */}
-        {isModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-30">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-lg w-96">
-              <h2 className="text-lg font-semibold mb-4">Add Collaborators</h2>
-              <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
-                {users.map((u) => (
-                  <label key={u._id} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedUserId.has(u._id)}
-                      onChange={() => handleUserClick(u._id)}
-                    />
-                    {u.email}
-                  </label>
-                ))}
-              </div>
-              <div className="mt-4 flex justify-end gap-2">
-                <button
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={addCollaborators}
-                  className="px-4 py-2 bg-blue-600 text-white rounded"
-                >
-                  Add
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <div className="flex items-center border-t border-gray-300 dark:border-gray-700 p-2">
+          <input
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            className="flex-grow p-2 bg-transparent outline-none"
+            placeholder="Enter message..."
+          />
+          <button
+            onClick={send}
+            className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition"
+          >
+            Send
+          </button>
+        </div>
       </section>
 
-      {/* Center: File Explorer + Editor */}
-      <section className="flex flex-grow h-full">
-        {/* Explorer */}
-        <div className="explorer bg-gray-200 dark:bg-gray-800 w-64 border-r border-gray-300 dark:border-gray-700">
-          <div className="p-2 font-semibold text-sm text-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-700">
-            Files
-          </div>
-          <div>
+      {/* Resizer */}
+      <div
+        ref={resizerRef}
+        onMouseDown={() => handleResizerMouseDown('left-center')}
+        className="w-1 cursor-col-resize bg-gray-400 dark:bg-gray-600"
+      ></div>
+
+      {/* Center panel */}
+      <section className="flex flex-col" style={{ width: centerWidth }}>
+        {/* File Explorer */}
+        <div className="flex border-b border-gray-300 dark:border-gray-700">
+          <div className="bg-gray-200 dark:bg-gray-800 w-64 p-2">
             {Object.keys(fileTree).map((file, i) => (
               <button
                 key={i}
@@ -265,7 +218,7 @@ const Project = () => {
                   setCurrentFile(file)
                   setOpenFiles((prev) => [...new Set([...prev, file])])
                 }}
-                className={`block w-full text-left px-4 py-2 hover:bg-blue-100 dark:hover:bg-blue-900 ${
+                className={`block w-full text-left px-2 py-1 hover:bg-blue-100 dark:hover:bg-blue-900 ${
                   currentFile === file
                     ? 'bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
                     : ''
@@ -275,116 +228,76 @@ const Project = () => {
               </button>
             ))}
           </div>
-        </div>
 
-        {/* Editor */}
-        <div className="flex flex-col flex-grow">
-          <div className="flex justify-between items-center bg-gray-100 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700 p-2">
-            <div className="flex gap-2">
-              {openFiles.map((file, i) => (
-                <button
-                  key={i}
-                  onClick={() => setCurrentFile(file)}
-                  className={`px-4 py-1 rounded-t-md ${
-                    currentFile === file
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-300 dark:bg-gray-700 text-gray-900 dark:text-gray-200'
-                  }`}
-                >
-                  {file}
-                </button>
-              ))}
+          {/* Editor */}
+          <div className="flex flex-col flex-grow">
+            <div className="flex justify-between items-center p-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700">
+              <div className="flex gap-2">
+                {openFiles.map((file, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentFile(file)}
+                    className={`px-2 py-1 rounded-t-md ${
+                      currentFile === file
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-300 dark:bg-gray-700 text-gray-900 dark:text-gray-200'
+                    }`}
+                  >
+                    {file}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <button
-              onClick={async () => {
-                if (!webContainer) {
-                  alert(
-                    '⚠️ WebContainer not available on deployed site.\nRun feature works only on localhost.'
-                  )
-                  return
-                }
-
-                try {
-                  await webContainer.mount(fileTree)
-                  const installProcess = await webContainer.spawn('npm', ['install'])
-                  installProcess.output.pipeTo(
-                    new WritableStream({
-                      write(chunk) {
-                        console.log('📦 install:', chunk)
-                      },
-                    })
-                  )
-
-                  if (runProcess) runProcess.kill()
-
-                  const tempRunProcess = await webContainer.spawn('npm', ['start'])
-                  tempRunProcess.output.pipeTo(
-                    new WritableStream({
-                      write(chunk) {
-                        console.log('🚀 run:', chunk)
-                      },
-                    })
-                  )
-                  setRunProcess(tempRunProcess)
-
-                  webContainer.on('server-ready', (port, url) => {
-                    console.log(`✅ Server ready at ${url}`)
-                    setIframeUrl(url)
-                  })
-                } catch (err) {
-                  console.error('❌ Error running project:', err)
-                  alert('Error starting project. Check console.')
-                }
-              }}
-              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition"
-            >
-              Run
-            </button>
-          </div>
-
-          <div className="flex-grow overflow-auto bg-gray-50 dark:bg-gray-900 p-3">
-            {fileTree[currentFile] && (
-              <pre className="hljs">
-                <code
-                  className="hljs outline-none"
-                  contentEditable
-                  suppressContentEditableWarning
-                  onBlur={(e) => {
-                    const updated = e.target.innerText
-                    const ft = {
-                      ...fileTree,
-                      [currentFile]: { file: { contents: updated } },
-                    }
-                    setFileTree(ft)
-                    saveFileTree(ft)
-                  }}
-                  dangerouslySetInnerHTML={{
-                    __html: hljs.highlight(
-                      'javascript',
-                      fileTree[currentFile].file.contents
-                    ).value,
-                  }}
-                  style={{ whiteSpace: 'pre-wrap', paddingBottom: '20rem' }}
-                />
-              </pre>
-            )}
+            <div className="flex-grow overflow-auto p-2 bg-gray-50 dark:bg-gray-900">
+              {fileTree[currentFile] && (
+                <pre className="hljs">
+                  <code
+                    className="hljs outline-none"
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={(e) => {
+                      const updated = e.target.innerText
+                      const ft = {
+                        ...fileTree,
+                        [currentFile]: { file: { contents: updated } },
+                      }
+                      setFileTree(ft)
+                      saveFileTree(ft)
+                    }}
+                    dangerouslySetInnerHTML={{
+                      __html: hljs.highlight(
+                        'javascript',
+                        fileTree[currentFile].file.contents
+                      ).value,
+                    }}
+                  />
+                </pre>
+              )}
+            </div>
           </div>
         </div>
-
-        {/* Right Panel: Web Preview */}
-        {iframeUrl && webContainer && (
-          <div className="w-96 flex flex-col border-l border-gray-300 dark:border-gray-700">
-            <input
-              type="text"
-              value={iframeUrl}
-              onChange={(e) => setIframeUrl(e.target.value)}
-              className="p-2 bg-gray-200 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700 text-sm outline-none"
-            />
-            <iframe src={iframeUrl} className="flex-grow w-full"></iframe>
-          </div>
-        )}
       </section>
+
+      {/* Resizer */}
+      <div
+        ref={resizerRef}
+        onMouseDown={() => handleResizerMouseDown('center-right')}
+        className="w-1 cursor-col-resize bg-gray-400 dark:bg-gray-600"
+      ></div>
+
+      {/* Right panel */}
+      {iframeUrl && webContainer && (
+        <section className="flex flex-col border-l border-gray-300 dark:border-gray-700" style={{ width: rightWidth }}>
+          <input
+            type="text"
+            value={iframeUrl}
+            onChange={(e) => setIframeUrl(e.target.value)}
+            className="p-2 bg-gray-200 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700 text-sm outline-none"
+          />
+          <iframe src={iframeUrl} className="flex-grow w-full"></iframe>
+        </section>
+      )}
     </main>
   )
 }
