@@ -11,6 +11,7 @@
     }
   },
   "routes": {
+    "/webcontainer/fetch.worker.js": "/webcontainer/fetch.worker.js",
     "/**": "index.html"
   }
 }
