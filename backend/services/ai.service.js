@@ -6,7 +6,7 @@ export async function generateResult(prompt) {
   try {
     // Changed model to gemini-2.5-flash-lite for higher daily limits (1,500 requests/day)
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash-lite", 
+      model: "gemini-2.5-flash", 
       generationConfig: {
         responseMimeType: "application/json",
       },
